@@ -54,6 +54,11 @@ namespace VkNet.FluentCommands.UserBot
         private Func<IVkApi, Message, System.Exception, CancellationToken, Task> _botException;
 
         /// <summary>
+        ///     Stores the library exception handler.
+        /// </summary>
+        private Func<System.Exception, CancellationToken, Task> _exception;
+        
+        /// <summary>
         ///      Initializes a new instance of the <see cref="FluentUserBotCommands{TBotClient}"/> class.
         /// </summary>
         /// <param name="botClient">Implementation of interaction with VK.</param>
@@ -113,6 +118,12 @@ namespace VkNet.FluentCommands.UserBot
         }
 
         /// <inheritdoc />
+        public void OnException(Func<System.Exception, CancellationToken, Task> exception)
+        {
+            _exception = exception ?? throw new ArgumentNullException(nameof(exception));
+        }
+        
+        /// <inheritdoc />
         public async Task ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -127,53 +138,63 @@ namespace VkNet.FluentCommands.UserBot
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var longPollHistory = await GetLongPollHistoryAsync(
-                    fields: _longPollConfiguration.Fields,
-                    ts: ts,
-                    pts: pts,
-                    previewLength: _longPollConfiguration.PreviewLength,
-                    onlines: _longPollConfiguration.Onlines,
-                    eventsLimit: _longPollConfiguration.EventsLimit,
-                    msgsLimit: _longPollConfiguration.MsgsLimit,
-                    maxMsgId: _longPollConfiguration.MaxMsgId,
-                    lpVersion: _longPollConfiguration.LpVersion,
-                    cancellationToken: cancellationToken);
-
-                if (longPollHistory?.Messages == null)
+                try
                 {
-                    continue;
-                }
+                    var longPollHistory = await GetLongPollHistoryAsync(
+                        fields: _longPollConfiguration.Fields,
+                        ts: ts,
+                        pts: pts,
+                        previewLength: _longPollConfiguration.PreviewLength,
+                        onlines: _longPollConfiguration.Onlines,
+                        eventsLimit: _longPollConfiguration.EventsLimit,
+                        msgsLimit: _longPollConfiguration.MsgsLimit,
+                        maxMsgId: _longPollConfiguration.MaxMsgId,
+                        lpVersion: _longPollConfiguration.LpVersion,
+                        cancellationToken: cancellationToken);
 
-                Parallel.ForEach(source: longPollHistory.Messages, body: async update =>
-                {
-                    try
+                    if (longPollHistory?.Messages == null)
                     {
-                        if (!string.IsNullOrWhiteSpace(update.Text))
-                        {
-                            var command = _textCommands
-                                .Where(predicate: x =>
-                                    Regex.IsMatch(input: update.Text, pattern: x.Key.Item1, options: x.Key.Item2))
-                                .Select(selector: x => x.Value)
-                                .SingleOrDefault();
+                        continue;
+                    }
 
-                            if (command == null)
+                    Parallel.ForEach(source: longPollHistory.Messages, body: async update =>
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrWhiteSpace(update.Text))
                             {
-                                return;
+                                var command = _textCommands
+                                    .Where(predicate: x =>
+                                        Regex.IsMatch(input: update.Text, pattern: x.Key.Item1, options: x.Key.Item2))
+                                    .Select(selector: x => x.Value)
+                                    .SingleOrDefault();
+
+                                if (command == null)
+                                {
+                                    return;
+                                }
+
+                                await command(arg1: _botClient, arg2: update, arg3: cancellationToken);
                             }
-
-                            await command(arg1: _botClient, arg2: update, arg3: cancellationToken);
                         }
-                    }
-                    catch (System.Exception e)
-                    {
-                        if (_botException != null)
+                        catch (System.Exception e)
                         {
-                            await _botException.Invoke(_botClient, update, e, cancellationToken);
+                            if (_botException != null)
+                            {
+                                await _botException.Invoke(_botClient, update, e, cancellationToken);
+                            }
                         }
-                    }
-                });
+                    });
 
-                pts = longPollHistory.NewPts;
+                    pts = longPollHistory.NewPts;
+                }
+                catch (System.Exception e)
+                {
+                    if (_exception != null)
+                    {
+                        await _exception.Invoke(e, cancellationToken);
+                    }
+                }
             }
         }
 

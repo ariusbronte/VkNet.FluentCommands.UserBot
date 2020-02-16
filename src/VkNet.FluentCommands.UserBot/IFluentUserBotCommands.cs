@@ -53,6 +53,12 @@ namespace VkNet.FluentCommands.UserBot
         /// </summary>
         /// <param name="botException">Trigger actions performed.</param>
         void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> botException);
+        
+        /// <summary>
+        ///     The trigger for Library exception handling.
+        /// </summary>
+        /// <param name="exception">Trigger actions performed.</param>
+        void OnException(Func<System.Exception, CancellationToken, Task> exception);
 
         /// <summary>
         ///     Starts receiving messages.
