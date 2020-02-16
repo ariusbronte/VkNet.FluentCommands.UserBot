@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Threading.Tasks;
 using VkNet.Abstractions;
+using VkNet.Model;
+
 // ReSharper disable MemberCanBeProtected.Global
 
 namespace VkNet.FluentCommands.UserBot
@@ -33,6 +36,21 @@ namespace VkNet.FluentCommands.UserBot
         public FluentUserBotCommands(Func<TBotClient> botClient)
         {
             _botClient = botClient();
+        }
+        
+        /// <summary>
+        ///     Authorize of the user bot.
+        /// </summary>
+        /// <param name="apiAuthParams">Authorization parameter.</param>
+        /// <exception cref="ArgumentNullException">Thrown if apiAuthParams is null.</exception>
+        public async Task InitBotAsync(IApiAuthParams apiAuthParams)
+        {
+            if (apiAuthParams == null)
+            {
+                throw new ArgumentNullException(paramName: nameof(apiAuthParams));
+            }
+
+            await _botClient.AuthorizeAsync(@params: apiAuthParams);
         }
     }
 }
