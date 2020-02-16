@@ -4,9 +4,10 @@ using System.ComponentModel;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using VkNet.Abstractions;
+using VkNet.AudioBypassService.Extensions;
 using VkNet.Model;
-using VkNet.Model.GroupUpdate;
 
 // ReSharper disable MemberCanBeProtected.Global
 
@@ -18,9 +19,12 @@ namespace VkNet.FluentCommands.UserBot
         /// <summary>
         ///      Initializes a new instance of the <see cref="FluentUserBotCommands"/> class.
         /// </summary>
-        public FluentUserBotCommands() : base(botClient: () => new VkApi())
+        public FluentUserBotCommands() : base(botClient: () =>
         {
-        }
+            var services = new ServiceCollection();
+            services.AddAudioBypass();
+            return new VkApi(services);
+        }) { }
     }
 
     /// <summary>
@@ -33,7 +37,12 @@ namespace VkNet.FluentCommands.UserBot
         ///     Implementation of interaction with VK.
         /// </summary>
         private readonly TBotClient _botClient;
-        
+
+        /// <summary>
+        ///    Long poll configuration
+        /// </summary>
+        private UserLongPollConfiguration _longPollConfiguration = new UserLongPollConfiguration();
+
         /// <summary>
         ///     Text commands storage.
         /// </summary>
@@ -48,7 +57,7 @@ namespace VkNet.FluentCommands.UserBot
         {
             _botClient = botClient();
         }
-        
+
         /// <summary>
         ///     Authorize of the user bot.
         /// </summary>
@@ -63,7 +72,16 @@ namespace VkNet.FluentCommands.UserBot
 
             await _botClient.AuthorizeAsync(@params: apiAuthParams);
         }
-        
+
+        /// <summary>
+        ///     Method to set custom <see cref="VkNet.FluentCommands.UserBot.UserLongPollConfiguration"/>.
+        /// </summary>
+        /// <param name="configuration">Custom long poll configuration.</param>
+        public void ConfigureUserLongPoll(UserLongPollConfiguration configuration)
+        {
+            _longPollConfiguration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        }
+
         /// <summary>
         ///     Trigger on a text command.
         /// </summary>
@@ -76,7 +94,7 @@ namespace VkNet.FluentCommands.UserBot
         {
             OnText(tuple: (pattern, RegexOptions.None), func: func);
         }
-        
+
         /// <summary>
         ///     Trigger on a text command.
         /// </summary>
@@ -105,7 +123,5 @@ namespace VkNet.FluentCommands.UserBot
 
             _textCommands.TryAdd(key: (tuple.pattern, tuple.options), value: func);
         }
-        
-        
     }
 }
