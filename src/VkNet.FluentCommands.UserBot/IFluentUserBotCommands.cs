@@ -49,6 +49,12 @@ namespace VkNet.FluentCommands.UserBot
             Func<IVkApi, Message, CancellationToken, Task> func);
 
         /// <summary>
+        ///     The trigger for the exception handling logic of the message.
+        /// </summary>
+        /// <param name="botException">Trigger actions performed.</param>
+        void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> botException);
+
+        /// <summary>
         ///     Starts receiving messages.
         /// </summary>
         /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>

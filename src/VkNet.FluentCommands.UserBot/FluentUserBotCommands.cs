@@ -29,7 +29,6 @@ namespace VkNet.FluentCommands.UserBot
             return new VkApi(services);
         }) { }
     }
-
     
     public class FluentUserBotCommands<TBotClient> : IFluentUserBotCommands where TBotClient : IVkApi
     {
@@ -50,6 +49,11 @@ namespace VkNet.FluentCommands.UserBot
             _textCommands = new ConcurrentDictionary<(string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>();
 
         /// <summary>
+        ///     Stores the message logic exception handler
+        /// </summary>
+        private Func<IVkApi, Message, System.Exception, CancellationToken, Task> _botException;
+
+        /// <summary>
         ///      Initializes a new instance of the <see cref="FluentUserBotCommands{TBotClient}"/> class.
         /// </summary>
         /// <param name="botClient">Implementation of interaction with VK.</param>
@@ -58,7 +62,6 @@ namespace VkNet.FluentCommands.UserBot
             _botClient = botClient();
         }
 
-        
         /// <inheritdoc />
         public async Task InitBotAsync(IApiAuthParams apiAuthParams)
         {
@@ -102,12 +105,18 @@ namespace VkNet.FluentCommands.UserBot
 
             _textCommands.TryAdd(key: (tuple.pattern, tuple.options), value: func);
         }
-        
+
+        /// <inheritdoc />
+        public void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> botException)
+        {
+            _botException = botException ?? throw new ArgumentNullException(nameof(botException));
+        }
+
         /// <inheritdoc />
         public async Task ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
+
             var longPollServer = await GetLongPollServerAsync(
                 needPts: _longPollConfiguration.NeedPts,
                 lpVersion: _longPollConfiguration.LpVersion,
@@ -137,23 +146,33 @@ namespace VkNet.FluentCommands.UserBot
 
                 Parallel.ForEach(source: longPollHistory.Messages, body: async update =>
                 {
-                    if (!string.IsNullOrWhiteSpace(update.Text))
+                    try
                     {
-                        var command = _textCommands
-                            .Where(predicate: x => 
-                                Regex.IsMatch(input: update.Text, pattern: x.Key.Item1, options: x.Key.Item2))
-                            .Select(selector: x => x.Value)
-                            .SingleOrDefault();
-
-                        if (command == null)
+                        if (!string.IsNullOrWhiteSpace(update.Text))
                         {
-                            return;
-                        }
+                            var command = _textCommands
+                                .Where(predicate: x =>
+                                    Regex.IsMatch(input: update.Text, pattern: x.Key.Item1, options: x.Key.Item2))
+                                .Select(selector: x => x.Value)
+                                .SingleOrDefault();
 
-                        await command(arg1: _botClient, arg2: update, arg3: cancellationToken);
+                            if (command == null)
+                            {
+                                return;
+                            }
+
+                            await command(arg1: _botClient, arg2: update, arg3: cancellationToken);
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        if (_botException != null)
+                        {
+                            await _botException.Invoke(_botClient, update, e, cancellationToken);
+                        }
                     }
                 });
-                
+
                 pts = longPollHistory.NewPts;
             }
         }
@@ -237,7 +256,7 @@ namespace VkNet.FluentCommands.UserBot
                 LpVersion = lpVersion
             });
         }
-        
+
         /// <inheritdoc cref="IDisposable" />
         public void Dispose()
         {
