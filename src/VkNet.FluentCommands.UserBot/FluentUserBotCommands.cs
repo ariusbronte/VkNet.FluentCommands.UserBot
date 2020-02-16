@@ -1,7 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using VkNet.Abstractions;
 using VkNet.Model;
+using VkNet.Model.GroupUpdate;
 
 // ReSharper disable MemberCanBeProtected.Global
 
@@ -28,6 +33,12 @@ namespace VkNet.FluentCommands.UserBot
         ///     Implementation of interaction with VK.
         /// </summary>
         private readonly TBotClient _botClient;
+        
+        /// <summary>
+        ///     Text commands storage.
+        /// </summary>
+        private readonly ConcurrentDictionary<(string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>
+            _textCommands = new ConcurrentDictionary<(string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>();
 
         /// <summary>
         ///      Initializes a new instance of the <see cref="FluentUserBotCommands{TBotClient}"/> class.
@@ -52,5 +63,49 @@ namespace VkNet.FluentCommands.UserBot
 
             await _botClient.AuthorizeAsync(@params: apiAuthParams);
         }
+        
+        /// <summary>
+        ///     Trigger on a text command.
+        /// </summary>
+        /// <param name="pattern">Regular expression.</param>
+        /// <param name="func">Trigger actions performed.</param>
+        /// <exception cref="ArgumentException">Thrown if regular expression is null or whitespace.</exception>
+        /// <exception cref="InvalidEnumArgumentException">Thrown if regex options is not defined.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
+        public void OnText(string pattern, Func<IVkApi, Message, CancellationToken, Task> func)
+        {
+            OnText(tuple: (pattern, RegexOptions.None), func: func);
+        }
+        
+        /// <summary>
+        ///     Trigger on a text command.
+        /// </summary>
+        /// <param name="tuple">Regular expression and Regex options.</param>
+        /// <param name="func">Trigger actions performed.</param>
+        /// <exception cref="ArgumentException">Thrown if regular expression is null or whitespace.</exception>
+        /// <exception cref="InvalidEnumArgumentException">Thrown if regex options is not defined.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
+        public void OnText((string pattern, RegexOptions options) tuple,
+            Func<IVkApi, Message, CancellationToken, Task> func)
+        {
+            if (string.IsNullOrWhiteSpace(value: tuple.pattern))
+            {
+                throw new ArgumentException(message: "Value cannot be null or whitespace.", paramName: nameof(tuple.pattern));
+            }
+
+            if (!Enum.IsDefined(enumType: typeof(RegexOptions), value: tuple.options))
+            {
+                throw new InvalidEnumArgumentException(argumentName: nameof(tuple.options), invalidValue: (int) tuple.options, enumClass: typeof(RegexOptions));
+            }
+
+            if (func == null)
+            {
+                throw new ArgumentNullException(paramName: nameof(func));
+            }
+
+            _textCommands.TryAdd(key: (tuple.pattern, tuple.options), value: func);
+        }
+        
+        
     }
 }
