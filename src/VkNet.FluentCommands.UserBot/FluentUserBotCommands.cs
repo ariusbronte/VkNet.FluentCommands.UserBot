@@ -30,11 +30,8 @@ namespace VkNet.FluentCommands.UserBot
         }) { }
     }
 
-    /// <summary>
-    ///     Main entry class to use VkNet.FluentCommands.UserBot.
-    /// </summary>
-    /// <typeparam name="TBotClient">Custom implementation of interaction with VK.</typeparam>
-    public class FluentUserBotCommands<TBotClient> where TBotClient : IVkApi
+    
+    public class FluentUserBotCommands<TBotClient> : IFluentUserBotCommands where TBotClient : IVkApi
     {
         /// <summary>
         ///     Implementation of interaction with VK.
@@ -61,11 +58,8 @@ namespace VkNet.FluentCommands.UserBot
             _botClient = botClient();
         }
 
-        /// <summary>
-        ///     Authorize of the user bot.
-        /// </summary>
-        /// <param name="apiAuthParams">Authorization parameter.</param>
-        /// <exception cref="ArgumentNullException">Thrown if apiAuthParams is null.</exception>
+        
+        /// <inheritdoc />
         public async Task InitBotAsync(IApiAuthParams apiAuthParams)
         {
             if (apiAuthParams == null)
@@ -76,38 +70,20 @@ namespace VkNet.FluentCommands.UserBot
             await _botClient.AuthorizeAsync(@params: apiAuthParams);
         }
 
-        /// <summary>
-        ///     Method to set custom <see cref="VkNet.FluentCommands.UserBot.UserLongPollConfiguration"/>.
-        /// </summary>
-        /// <param name="configuration">Custom long poll configuration.</param>
+        /// <inheritdoc />
         public void ConfigureUserLongPoll(UserLongPollConfiguration configuration)
         {
             _longPollConfiguration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        /// <summary>
-        ///     Trigger on a text command.
-        /// </summary>
-        /// <param name="pattern">Regular expression.</param>
-        /// <param name="func">Trigger actions performed.</param>
-        /// <exception cref="ArgumentException">Thrown if regular expression is null or whitespace.</exception>
-        /// <exception cref="InvalidEnumArgumentException">Thrown if regex options is not defined.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
+        /// <inheritdoc />
         public void OnText(string pattern, Func<IVkApi, Message, CancellationToken, Task> func)
         {
             OnText(tuple: (pattern, RegexOptions.None), func: func);
         }
 
-        /// <summary>
-        ///     Trigger on a text command.
-        /// </summary>
-        /// <param name="tuple">Regular expression and Regex options.</param>
-        /// <param name="func">Trigger actions performed.</param>
-        /// <exception cref="ArgumentException">Thrown if regular expression is null or whitespace.</exception>
-        /// <exception cref="InvalidEnumArgumentException">Thrown if regex options is not defined.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
-        public void OnText((string pattern, RegexOptions options) tuple,
-            Func<IVkApi, Message, CancellationToken, Task> func)
+        /// <inheritdoc />
+        public void OnText((string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> func)
         {
             if (string.IsNullOrWhiteSpace(value: tuple.pattern))
             {
@@ -127,10 +103,7 @@ namespace VkNet.FluentCommands.UserBot
             _textCommands.TryAdd(key: (tuple.pattern, tuple.options), value: func);
         }
         
-         /// <summary>
-        ///     Starts receiving messages.
-        /// </summary>
-        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        /// <inheritdoc />
         public async Task ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -231,6 +204,12 @@ namespace VkNet.FluentCommands.UserBot
                 MaxMsgId = maxMsgId,
                 LpVersion = lpVersion
             });
+        }
+        
+        /// <inheritdoc cref="IDisposable" />
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
         }
     }
 }
