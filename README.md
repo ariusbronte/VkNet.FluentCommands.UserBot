@@ -1,5 +1,5 @@
 # VkNet.FluentCommands.UserBot
-Extension for VkNet to quickly create bots.
+Extension for [VkNet](https://github.com/vknet/vk) to quickly create bots.
 
 [![NuGet](https://img.shields.io/nuget/v/VkNet.FluentCommands.UserBot.svg)](https://www.nuget.org/packages/VkNet.FluentCommands.UserBot/)
 [![NuGet](https://img.shields.io/nuget/dt/VkNet.FluentCommands.UserBot.svg)](https://www.nuget.org/packages/VkNet.FluentCommands.UserBot/)
