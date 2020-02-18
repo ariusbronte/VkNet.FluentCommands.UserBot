@@ -128,9 +128,8 @@ namespace VkNet.FluentCommands.UserBot
         public async Task ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var longPollServer = await GetLongPollServerAsync(cancellationToken: cancellationToken);
-
+            
             var pts = longPollServer.Pts;
             var ts = ulong.Parse(s: longPollServer.Ts);
 
@@ -138,14 +137,14 @@ namespace VkNet.FluentCommands.UserBot
             {
                 try
                 {
-                    var longPollHistory = await GetLongPollHistoryAsync(ts: ts, pts: pts, cancellationToken: cancellationToken);
-
+                    var longPollHistory =
+                        await GetLongPollHistoryAsync(ts: ts, pts: pts, cancellationToken: cancellationToken);
                     if (longPollHistory?.Messages == null)
                     {
                         continue;
                     }
 
-                    Parallel.ForEach(source: longPollHistory.Messages, body: async update =>
+                    foreach (var update in longPollHistory.Messages)
                     {
                         try
                         {
@@ -167,21 +166,15 @@ namespace VkNet.FluentCommands.UserBot
                         }
                         catch (System.Exception e)
                         {
-                            if (_botException != null)
-                            {
-                                await _botException.Invoke(_botClient, update, e, cancellationToken);
-                            }
+                            await (_botException?.Invoke(_botClient, update, e, cancellationToken) ?? throw e);
                         }
-                    });
+                    }
 
                     pts = longPollHistory.NewPts;
                 }
                 catch (System.Exception e)
                 {
-                    if (_exception != null)
-                    {
-                        await _exception.Invoke(e, cancellationToken);
-                    }
+                    await (_exception?.Invoke(e, cancellationToken) ?? throw e);
                 }
             }
         }
