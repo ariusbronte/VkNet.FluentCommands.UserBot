@@ -13,6 +13,11 @@
         /// <summary>
         ///     Text message type.
         /// </summary>
-        Message
+        Message,
+        
+        /// <summary>
+        ///     Sticker message type.
+        /// </summary>
+        Sticker
     }
 }

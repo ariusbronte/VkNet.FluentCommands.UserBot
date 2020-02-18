@@ -70,6 +70,22 @@ namespace VkNet.FluentCommands.UserBot
         void OnText((long peerId, string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> func);
         
         /// <summary>
+        ///     Trigger on a sticker command.
+        /// </summary>
+        /// <param name="stickerId">A unique identifier sticker.</param>
+        /// <param name="func">Trigger actions performed.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if sticker id is less than or equal to zero.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
+        void OnSticker(long stickerId, Func<IVkApi, Message, CancellationToken, Task> func);
+        
+        /// <summary>
+        ///     Trigger on a sticker command.
+        /// </summary>
+        /// <param name="func">Trigger actions performed.</param>
+        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
+        void OnSticker(Func<IVkApi, Message, CancellationToken, Task> func);
+
+        /// <summary>
         ///     The trigger for the exception handling logic of the message.
         /// </summary>
         /// <param name="botException">Trigger actions performed.</param>

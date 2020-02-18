@@ -12,6 +12,7 @@ using VkNet.Enums;
 using VkNet.Enums.Filters;
 using VkNet.Exception;
 using VkNet.Model;
+using VkNet.Model.Attachments;
 using VkNet.Model.RequestParams;
 
 // ReSharper disable MemberCanBeProtected.Global
@@ -49,6 +50,17 @@ namespace VkNet.FluentCommands.UserBot
         /// </summary>
         private readonly ConcurrentDictionary<(long?, string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>
             _textCommands = new ConcurrentDictionary<(long?, string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>();
+
+        /// <summary>
+        ///     Sticker commands storage.
+        /// </summary>
+        private readonly ConcurrentDictionary<long, Func<IVkApi, Message, CancellationToken, Task>>
+            _stickerCommands = new ConcurrentDictionary<long, Func<IVkApi, Message, CancellationToken, Task>>();
+        
+        /// <summary>
+        ///     Stores the sticker logic handler
+        /// </summary>
+        private Func<IVkApi, Message, CancellationToken, Task> _onStickerCommand;
 
         /// <summary>
         ///     Stores the message logic exception handler
@@ -142,7 +154,29 @@ namespace VkNet.FluentCommands.UserBot
 
             _textCommands.TryAdd(key: (tuple.peerId, tuple.pattern, tuple.options), value: func);
         }
+        
+        /// <inheritdoc />
+        public void OnSticker(long stickerId, Func<IVkApi, Message, CancellationToken, Task> func)
+        {
+            if (stickerId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(stickerId));
+            }
 
+            if (func == null)
+            {
+                throw new ArgumentNullException(nameof(func));
+            }
+
+            _stickerCommands.TryAdd(stickerId, func);
+        }
+
+        /// <inheritdoc />
+        public void OnSticker(Func<IVkApi, Message, CancellationToken, Task> func)
+        {
+            _onStickerCommand = func ?? throw new ArgumentNullException(nameof(func));
+        }
+        
         /// <inheritdoc />
         public void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> botException)
         {
@@ -183,6 +217,9 @@ namespace VkNet.FluentCommands.UserBot
                             {
                                 case MessageType.Message:
                                     await OnTextMessage(message, cancellationToken);
+                                    break;
+                                case MessageType.Sticker:
+                                    await OnStickerMessage(message, cancellationToken);
                                     break;
                                 case MessageType.None:
                                     break;
@@ -226,6 +263,11 @@ namespace VkNet.FluentCommands.UserBot
             {
                 return MessageType.Message;
             }
+            
+            if (message.Attachments.Any(x => x.Type == typeof(Sticker)))
+            {
+                return MessageType.Sticker;
+            }
 
             return MessageType.None;
         }
@@ -259,6 +301,39 @@ namespace VkNet.FluentCommands.UserBot
 
             if (command == null)
             {
+                return;
+            }
+
+            await command(_botClient, message, cancellationToken);
+        }
+        
+        /// <summary>
+        ///     This method has a sticker processing logic.
+        /// </summary>
+        /// <param name="message">User updates</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        private async Task OnStickerMessage(Message message, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var stickerId = message.Attachments
+                .Where(x => x.Type == typeof(Sticker))
+                .Select(x => x.Instance.Id)
+                .FirstOrDefault();
+
+            var command = _stickerCommands
+                .AsParallel()
+                .Where(x => x.Key == stickerId)
+                .Select(x => x.Value)
+                .SingleOrDefault();
+
+            if (command == null)
+            {
+                if (_onStickerCommand != null)
+                {
+                    await _onStickerCommand(_botClient, message, cancellationToken);
+                }
+                
                 return;
             }
 
