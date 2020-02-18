@@ -63,6 +63,11 @@ namespace VkNet.FluentCommands.UserBot
         private Func<IVkApi, Message, CancellationToken, Task> _onStickerCommand;
 
         /// <summary>
+        ///     Stores the photo logic handler
+        /// </summary>
+        private Func<IVkApi, Message, CancellationToken, Task> _onPhotoCommand;
+        
+        /// <summary>
         ///     Stores the message logic exception handler
         /// </summary>
         private Func<IVkApi, Message, System.Exception, CancellationToken, Task> _botException;
@@ -178,6 +183,12 @@ namespace VkNet.FluentCommands.UserBot
         }
         
         /// <inheritdoc />
+        public void OnPhoto(Func<IVkApi, Message, CancellationToken, Task> func)
+        {
+            _onPhotoCommand = func ?? throw new ArgumentNullException(nameof(func));
+        }
+        
+        /// <inheritdoc />
         public void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> botException)
         {
             _botException = botException ?? throw new ArgumentNullException(nameof(botException));
@@ -220,6 +231,12 @@ namespace VkNet.FluentCommands.UserBot
                                     break;
                                 case MessageType.Sticker:
                                     await OnStickerMessage(message, cancellationToken);
+                                    break;
+                                case MessageType.Photo:
+                                    if (_onPhotoCommand != null)
+                                    {
+                                        await _onPhotoCommand(_botClient, message, cancellationToken);
+                                    }
                                     break;
                                 case MessageType.None:
                                     break;
@@ -267,6 +284,11 @@ namespace VkNet.FluentCommands.UserBot
             if (message.Attachments.Any(x => x.Type == typeof(Sticker)))
             {
                 return MessageType.Sticker;
+            }
+            
+            if (message.Attachments.Any(x => x.Type == typeof(Photo)))
+            {
+                return MessageType.Photo;
             }
 
             return MessageType.None;
