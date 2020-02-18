@@ -10,6 +10,7 @@ using VkNet.Abstractions;
 using VkNet.AudioBypassService.Extensions;
 using VkNet.Enums;
 using VkNet.Enums.Filters;
+using VkNet.Exception;
 using VkNet.Model;
 using VkNet.Model.RequestParams;
 
@@ -193,6 +194,18 @@ namespace VkNet.FluentCommands.UserBot
                         }
 
                         pts = longPollHistory.NewPts;
+                    }
+                }
+                catch (LongPollKeyExpiredException e)
+                {
+                    longPollServer = await GetLongPollServerAsync(cancellationToken: cancellationToken);
+
+                    ts = uint.Parse(longPollServer.Ts);
+                    pts = longPollServer.Pts;
+
+                    if (_exception != null)
+                    {
+                        await _exception.Invoke(e, cancellationToken);
                     }
                 }
                 catch (System.Exception e)
