@@ -29,7 +29,7 @@ namespace VkNet.FluentCommands.UserBot
             return new VkApi(services);
         }) { }
     }
-    
+
     public class FluentUserBotCommands<TBotClient> : IFluentUserBotCommands where TBotClient : IVkApi
     {
         /// <summary>
@@ -57,7 +57,7 @@ namespace VkNet.FluentCommands.UserBot
         ///     Stores the library exception handler.
         /// </summary>
         private Func<System.Exception, CancellationToken, Task> _exception;
-        
+
         /// <summary>
         ///      Initializes a new instance of the <see cref="FluentUserBotCommands{TBotClient}"/> class.
         /// </summary>
@@ -91,7 +91,8 @@ namespace VkNet.FluentCommands.UserBot
         }
 
         /// <inheritdoc />
-        public void OnText((string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> func)
+        public void OnText((string pattern, RegexOptions options) tuple,
+            Func<IVkApi, Message, CancellationToken, Task> func)
         {
             if (string.IsNullOrWhiteSpace(value: tuple.pattern))
             {
@@ -122,16 +123,13 @@ namespace VkNet.FluentCommands.UserBot
         {
             _exception = exception ?? throw new ArgumentNullException(nameof(exception));
         }
-        
+
         /// <inheritdoc />
         public async Task ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var longPollServer = await GetLongPollServerAsync(
-                needPts: _longPollConfiguration.NeedPts,
-                lpVersion: _longPollConfiguration.LpVersion,
-                cancellationToken: cancellationToken);
+            var longPollServer = await GetLongPollServerAsync(cancellationToken: cancellationToken);
 
             var pts = longPollServer.Pts;
             var ts = ulong.Parse(s: longPollServer.Ts);
@@ -140,17 +138,7 @@ namespace VkNet.FluentCommands.UserBot
             {
                 try
                 {
-                    var longPollHistory = await GetLongPollHistoryAsync(
-                        fields: _longPollConfiguration.Fields,
-                        ts: ts,
-                        pts: pts,
-                        previewLength: _longPollConfiguration.PreviewLength,
-                        onlines: _longPollConfiguration.Onlines,
-                        eventsLimit: _longPollConfiguration.EventsLimit,
-                        msgsLimit: _longPollConfiguration.MsgsLimit,
-                        maxMsgId: _longPollConfiguration.MaxMsgId,
-                        lpVersion: _longPollConfiguration.LpVersion,
-                        cancellationToken: cancellationToken);
+                    var longPollHistory = await GetLongPollHistoryAsync(ts: ts, pts: pts, cancellationToken: cancellationToken);
 
                     if (longPollHistory?.Messages == null)
                     {
@@ -201,23 +189,17 @@ namespace VkNet.FluentCommands.UserBot
         /// <summary>
         ///     Get data for the connection.
         /// </summary>
-        /// <param name="needPts">Pts.</param>
-        /// <param name="lpVersion">Version.</param>
         /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
         /// <returns>Returns data for the connection to long poll</returns>
-        private async Task<LongPollServerResponse> GetLongPollServerAsync(
-            bool needPts,
-            uint lpVersion,
-            CancellationToken cancellationToken = default)
+        private async Task<LongPollServerResponse> GetLongPollServerAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await _botClient.Messages.GetLongPollServerAsync(needPts: needPts, lpVersion: lpVersion);
+            return await _botClient.Messages.GetLongPollServerAsync(needPts: _longPollConfiguration.NeedPts, lpVersion: _longPollConfiguration.LpVersion);
         }
 
         ///  <summary>
         ///      Get user events.
         ///  </summary>
-        ///  <param name="fields">List of additional fields to return.</param>
         ///  <param name="ts">
         ///      The last value of the ts parameter received from the long Poll server or using
         ///      of the messages method.getLongPollServer.
@@ -227,54 +209,25 @@ namespace VkNet.FluentCommands.UserBot
         ///      used to get actions that
         ///      always stored.
         ///  </param>
-        ///  <param name="previewLength">
-        ///      The number of characters you want to trim the message. Enter 0 if You
-        ///      don't want to crop the message. (across
-        ///      by default, messages are not truncated).
-        ///  </param>
-        ///  <param name="onlines">
-        ///      If you pass a value of 1 to this parameter, the history will be returned only from those
-        ///      users who are currently
-        ///      online. the flag can take the values 1 or 0.
-        ///  </param>
-        ///  <param name="eventsLimit">
-        ///      If the number of events in the history exceeds this value, it will be returned error.
-        ///      Positive number. The default is 1000. The minimum value is 1000.
-        /// </param>
-        ///  <param name="msgsLimit">The number of messages to return.</param>
-        ///  <param name="maxMsgId">
-        ///     Maximum message ID among those already available in the local copy.
-        ///     It is necessary to consider how the messages,
-        ///     received via API methods (for example, messages.getDialogs,
-        ///     messages.getHistory), and data obtained from Long.
-        /// </param>
-        ///  <param name="lpVersion">Version for connecting to Long Poll. Actual version: 3.</param>
         ///  <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
         ///  <returns>Returns group events.</returns>
         private async Task<LongPollHistoryResponse> GetLongPollHistoryAsync(
-            UsersFields fields,
             ulong ts,
             ulong? pts,
-            long? previewLength,
-            bool? onlines,
-            long? eventsLimit,
-            long? msgsLimit,
-            long? maxMsgId,
-            ulong? lpVersion,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             return await _botClient.Messages.GetLongPollHistoryAsync(@params: new MessagesGetLongPollHistoryParams
             {
-                Fields = fields,
                 Ts = ts,
                 Pts = pts,
-                PreviewLength = previewLength,
-                Onlines = onlines,
-                EventsLimit = eventsLimit,
-                MsgsLimit = msgsLimit,
-                MaxMsgId = maxMsgId,
-                LpVersion = lpVersion
+                Fields = _longPollConfiguration.Fields,
+                PreviewLength = _longPollConfiguration.PreviewLength,
+                Onlines = _longPollConfiguration.Onlines,
+                EventsLimit = _longPollConfiguration.EventsLimit,
+                MsgsLimit = _longPollConfiguration.MsgsLimit,
+                MaxMsgId = _longPollConfiguration.MaxMsgId,
+                LpVersion = _longPollConfiguration.LpVersion
             });
         }
 
