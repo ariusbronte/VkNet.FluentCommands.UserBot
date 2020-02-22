@@ -3,17 +3,22 @@
     /// <summary>
     ///     The type of incoming message.
     /// </summary>
-    internal enum MessageType
+    internal enum VkMessageType
     {
-        /// <summary>
-        ///     Unknown type.
-        /// </summary>
-        None,
-        
         /// <summary>
         ///     Text message type.
         /// </summary>
         Message,
+        
+        /// <summary>
+        ///     Reply message type.
+        /// </summary>
+        Reply,
+
+        /// <summary>
+        ///     Forward message type.
+        /// </summary>
+        Forward,
         
         /// <summary>
         ///     Sticker message type.
@@ -23,6 +28,11 @@
         /// <summary>
         ///     Photo message type.
         /// </summary>
-        Photo
+        Photo,
+        
+        /// <summary>
+        ///     Voice message type.
+        /// </summary>
+        Voice,
     }
 }

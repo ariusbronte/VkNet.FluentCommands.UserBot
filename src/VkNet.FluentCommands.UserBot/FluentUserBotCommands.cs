@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Security.Cryptography;
@@ -12,6 +13,9 @@ using VkNet.AudioBypassService.Extensions;
 using VkNet.Enums;
 using VkNet.Enums.Filters;
 using VkNet.Exception;
+using VkNet.FluentCommands.UserBot.Abstractions;
+using VkNet.FluentCommands.UserBot.Handlers;
+using VkNet.FluentCommands.UserBot.Storage;
 using VkNet.Model;
 using VkNet.Model.Attachments;
 using VkNet.Model.RequestParams;
@@ -20,123 +24,120 @@ using VkNet.Model.RequestParams;
 
 namespace VkNet.FluentCommands.UserBot
 {
-    /// <inheritdoc />
-    public class FluentUserBotCommands : FluentUserBotCommands<IVkApi>
-    {
-        /// <summary>
-        ///      Initializes a new instance of the <see cref="FluentUserBotCommands"/> class.
-        /// </summary>
-        public FluentUserBotCommands() : base(botClient: () =>
-        {
-            var services = new ServiceCollection();
-            services.AddAudioBypass();
-            return new VkApi(services);
-        }) { }
-    }
-
-    public class FluentUserBotCommands<TBotClient> : IFluentUserBotCommands where TBotClient : IVkApi
+    public class FluentUserBotCommands : IFluentGroupBotCommands
     {
         /// <summary>
         ///     Implementation of interaction with VK.
         /// </summary>
-        private readonly TBotClient _botClient;
-
-        /// <summary>
-        ///    Long poll configuration
-        /// </summary>
-        private UserLongPollConfiguration _longPollConfiguration = new UserLongPollConfiguration();
+        private readonly IVkApi _botClient;
+        private IUserLongPollConfiguration _longPollConfiguration = UserLongPollConfiguration.Default;
         
         private readonly RandomNumberGenerator _rng = RandomNumberGenerator.Create();
-
         private readonly Random _random = new Random();
-
-        /// <summary>
-        ///     Text commands storage.
-        /// </summary>
-        private readonly ConcurrentDictionary<(long?, string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>
-            _textCommands = new ConcurrentDictionary<(long?, string, RegexOptions), Func<IVkApi, Message, CancellationToken, Task>>();
-
-        /// <summary>
-        ///     Sticker commands storage.
-        /// </summary>
-        private readonly ConcurrentDictionary<long, Func<IVkApi, Message, CancellationToken, Task>>
-            _stickerCommands = new ConcurrentDictionary<long, Func<IVkApi, Message, CancellationToken, Task>>();
         
-        /// <summary>
-        ///     Stores the sticker logic handler
-        /// </summary>
-        private Func<IVkApi, Message, CancellationToken, Task> _onStickerCommand;
-
-        /// <summary>
-        ///     Stores the photo logic handler
-        /// </summary>
-        private Func<IVkApi, Message, CancellationToken, Task> _onPhotoCommand;
+        private readonly TextCommandsStore _textCommands = new TextCommandsStore();
+        private readonly ReplyCommandsStore _replyCommands = new ReplyCommandsStore();
+        private readonly StickerCommandsStore _stickerCommands = new StickerCommandsStore();
         
-        /// <summary>
-        ///     Stores the message logic exception handler
-        /// </summary>
-        private Func<IVkApi, Message, System.Exception, CancellationToken, Task> _botException;
+        private readonly PhotoEventStore _photoEvent = new PhotoEventStore();
+        private readonly VoiceEventStore _voiceEvent = new VoiceEventStore();
+        private readonly ForwardEventStore _forwardEvent = new ForwardEventStore();
+
+        private readonly BotExceptionEventStore _botExceptionEvent = new BotExceptionEventStore();
+        private readonly ExceptionEventStore _exceptionEvent = new ExceptionEventStore();
 
         /// <summary>
-        ///     Stores the library exception handler.
-        /// </summary>
-        private Func<System.Exception, CancellationToken, Task> _exception;
-
-        /// <summary>
-        ///      Initializes a new instance of the <see cref="FluentUserBotCommands{TBotClient}"/> class.
+        ///      Initializes a new instance of the <see cref="VkNet.FluentCommands.UserBot.FluentUserBotCommands"/> class.
         /// </summary>
         /// <param name="botClient">Implementation of interaction with VK.</param>
-        public FluentUserBotCommands(Func<TBotClient> botClient)
+        public FluentUserBotCommands(Func<IVkApi> botClient)
         {
             _botClient = botClient();
+        }
+        
+        /// <summary>
+        ///     Initializes a new instance of the
+        ///     <see cref="VkNet.FluentCommands.UserBot.FluentUserBotCommands"/> class without parameters.
+        /// </summary>
+        public FluentUserBotCommands()
+        {
+            _botClient = new VkApi(new ServiceCollection().AddAudioBypass());
         }
 
         /// <inheritdoc />
         public async Task InitBotAsync(IApiAuthParams apiAuthParams)
         {
-            if (apiAuthParams == null)
-            {
-                throw new ArgumentNullException(paramName: nameof(apiAuthParams));
-            }
+            if (apiAuthParams == null) throw new ArgumentNullException(nameof(apiAuthParams));
 
-            await _botClient.AuthorizeAsync(@params: apiAuthParams);
+            await _botClient.AuthorizeAsync(apiAuthParams).ConfigureAwait(false);
+        }
+        
+        /// <inheritdoc />
+        public async Task InitBotAsync(string login, string password)
+        {
+            if (string.IsNullOrWhiteSpace(login))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(login));
+            if (string.IsNullOrWhiteSpace(password))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(password));
+            
+            await _botClient.AuthorizeAsync(new ApiAuthParams
+            {
+                Login = login,
+                Password = password
+            }).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
-        public void ConfigureUserLongPoll(UserLongPollConfiguration configuration)
+        public void ConfigureUserLongPoll(IUserLongPollConfiguration configuration)
         {
             _longPollConfiguration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         }
 
+        #region OnTextHandlers
         /// <inheritdoc />
-        public void OnText(string pattern, Func<IVkApi, Message, CancellationToken, Task> func)
+        public void OnText(Func<IVkApi, Message, CancellationToken, Task> handler)
         {
-            OnText(tuple: (pattern, RegexOptions.None), func: func);
+            _textCommands.SetHandler(handler);
         }
         
         /// <inheritdoc />
-        public void OnText((string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> func)
+        public void OnText(string pattern, Func<IVkApi, Message, CancellationToken, Task> handler)
         {
-            OnTextHandler(tuple: (null, tuple.pattern, tuple.options), func: func);
+            _textCommands.Store((null, pattern, RegexOptions.None), handler);
         }
         
         /// <inheritdoc />
-        public void OnText((long peerId, string pattern) tuple, Func<IVkApi, Message, CancellationToken, Task> func)
+        public void OnText((string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
         {
-            OnText(tuple: (tuple.peerId, tuple.pattern, RegexOptions.None), func: func);
+            _textCommands.Store((null, tuple.pattern, tuple.options), handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnText((long peerId, string pattern) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            OnText((tuple.peerId, tuple.pattern, RegexOptions.None), handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnText((long peerId, string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+
+            _textCommands.Store(tuple, handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnText(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            OnText(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
         }
 
-        /// <inheritdoc />
-        public void OnText((long peerId, string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> func)
-        {
-            if (tuple.peerId <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
-            }
-            
-            OnTextHandler(tuple: tuple, func: func);
-        }
-        
         /// <inheritdoc />
         public void OnText(string pattern, string answer)
         {
@@ -154,27 +155,43 @@ namespace VkNet.FluentCommands.UserBot
         {
             OnText((tuple.peerId, tuple.pattern, RegexOptions.None), answer);
         }
-
+        
         /// <inheritdoc />
         public void OnText((long peerId, string pattern, RegexOptions options) tuple, string answer)
         { 
-            if (tuple.peerId <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
-            }
-            
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+
             OnTextHandler(tuple, answer);
         }
-
+        
+        /// <inheritdoc />
+        public void OnText(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnText(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answers[_random.Next(0, answers.Length)]);
+            });
+        }
+        
         /// <inheritdoc />
         public void OnText(string pattern, params string[] answers)
         {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
             OnTextHandler((null, pattern, RegexOptions.None), answers[_random.Next(0, answers.Length)]);
         }
         
         /// <inheritdoc />
         public void OnText((string pattern, RegexOptions options) tuple, params string[] answers)
         {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
             OnTextHandler((null, tuple.pattern, tuple.options), answers[_random.Next(0, answers.Length)]);
         }
         
@@ -187,109 +204,367 @@ namespace VkNet.FluentCommands.UserBot
         /// <inheritdoc />
         public void OnText((long peerId, string pattern, RegexOptions options) tuple, params string[] answers)
         {
-            if (answers.Length == 0)
-            {
-                throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
-            }
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
 
             OnTextHandler(tuple, answers[_random.Next(0, answers.Length)]);
         }
         
         /// <summary>
-        ///     The handler for all incoming short message triggers
+        ///     Common logic of abstracted text handlers.
         /// </summary>
         /// <param name="tuple">Regular expression and Regex options.</param>
-        /// <param name="answer">Short response to the received message.</param>
+        /// <param name="answer">Text response.</param>
         /// <exception cref="ArgumentException">Thrown if regular expression is null or whitespace.</exception>
-        /// <exception cref="ArgumentException">Thrown if answer expression is null or whitespace.</exception>
         /// <exception cref="InvalidEnumArgumentException">Thrown if regex options is not defined.</exception>
+        /// <exception cref="System.ArgumentException">Thrown if answer is null or whitespace.</exception>
         private void OnTextHandler((long? peerId, string pattern, RegexOptions options) tuple, string answer)
         {
-            if (string.IsNullOrWhiteSpace(answer))
-            {
-                throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
-            }
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
             
-            OnTextHandler(tuple, async (api, update, token) =>
+            _textCommands.Store(tuple, async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        #endregion
+
+        #region OnReplyHandlers
+        /// <inheritdoc />
+        public void OnReply(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _replyCommands.SetHandler(handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply(string pattern, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _replyCommands.Store((null, pattern, RegexOptions.None), handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _replyCommands.Store((null, tuple.pattern, tuple.options), handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((long peerId, string pattern) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            OnReply((tuple.peerId, tuple.pattern, RegexOptions.None), handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((long peerId, string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+
+            _replyCommands.Store(tuple, handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            OnReply(async (api, update, token) =>
             {
                 token.ThrowIfCancellationRequested();
                 await SendAsync(update.PeerId, answer);
             });
         }
         
+        /// <inheritdoc />
+        public void OnReply(string pattern, string answer)
+        {
+            OnReplyHandler((null, pattern, RegexOptions.None), answer);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((string pattern, RegexOptions options) tuple, string answer)
+        {
+            OnReplyHandler((null, tuple.pattern, tuple.options), answer);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((long peerId, string pattern) tuple, string answer)
+        {
+            OnReply((tuple.peerId, tuple.pattern, RegexOptions.None), answer);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((long peerId, string pattern, RegexOptions options) tuple, string answer)
+        { 
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+
+            OnReplyHandler(tuple, answer);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+
+            OnReply(answers[_random.Next(0, answers.Length)]);
+        } 
+        
+        /// <inheritdoc />
+        public void OnReply(string pattern, params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnReplyHandler((null, pattern, RegexOptions.None), answers[_random.Next(0, answers.Length)]);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((string pattern, RegexOptions options) tuple, params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnReplyHandler((null, tuple.pattern, tuple.options), answers[_random.Next(0, answers.Length)]);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((long peerId, string pattern) tuple, params string[] answers)
+        {
+            OnReply((tuple.peerId, tuple.pattern, RegexOptions.None), answers);
+        }
+        
+        /// <inheritdoc />
+        public void OnReply((long peerId, string pattern, RegexOptions options) tuple, params string[] answers)
+        {
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+
+            OnReplyHandler(tuple, answers[_random.Next(0, answers.Length)]);
+        }
+
         /// <summary>
-        ///     The main handler for all incoming message triggers
+        ///     Common logic of abstracted reply handlers.
         /// </summary>
         /// <param name="tuple">Regular expression and Regex options.</param>
-        /// <param name="func">Trigger actions performed.</param>
+        /// <param name="answer">Text response.</param>
         /// <exception cref="ArgumentException">Thrown if regular expression is null or whitespace.</exception>
         /// <exception cref="InvalidEnumArgumentException">Thrown if regex options is not defined.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if trigger actions in null.</exception>
-        private void OnTextHandler((long? peerId, string pattern, RegexOptions options) tuple, Func<IVkApi, Message, CancellationToken, Task> func)
+        /// <exception cref="System.ArgumentException">Thrown if answer is null or whitespace.</exception>
+        private void OnReplyHandler((long? peerId, string pattern, RegexOptions options) tuple, string answer)
         {
-            if (string.IsNullOrWhiteSpace(value: tuple.pattern))
+            if (string.IsNullOrWhiteSpace(answer)) 
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            _replyCommands.Store(tuple, async (api, update, token) =>
             {
-                throw new ArgumentException(message: "Value cannot be null or whitespace.", paramName: nameof(tuple.pattern));
-            }
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        #endregion
+        
+        #region StickerHandlers
+        /// <inheritdoc />
+        public void OnSticker(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _stickerCommands.SetHandler(handler);
+        }
 
-            if (!Enum.IsDefined(enumType: typeof(RegexOptions), value: tuple.options))
-            {
-                throw new InvalidEnumArgumentException(argumentName: nameof(tuple.options), invalidValue: (int) tuple.options, enumClass: typeof(RegexOptions));
-            }
+        /// <inheritdoc />
+        public void OnSticker(long stickerId, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _stickerCommands.Store((null, stickerId), handler);
+        }
 
-            if (func == null)
-            {
-                throw new ArgumentNullException(paramName: nameof(func));
-            }
-
-            _textCommands.TryAdd(key: (tuple.peerId, tuple.pattern, tuple.options), value: func);
+        /// <inheritdoc />
+        public void OnSticker((long peerId, long stickerId) tuple, Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+            
+            _stickerCommands.Store(tuple, handler);
         }
         
         /// <inheritdoc />
-        public void OnSticker(long stickerId, Func<IVkApi, Message, CancellationToken, Task> func)
+        public void OnSticker(string answer)
         {
-            if (stickerId <= 0)
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+
+            OnSticker(async (api, update, token) =>
             {
-                throw new ArgumentOutOfRangeException(nameof(stickerId));
-            }
-
-            if (func == null)
-            {
-                throw new ArgumentNullException(nameof(func));
-            }
-
-            _stickerCommands.TryAdd(stickerId, func);
-        }
-
-        /// <inheritdoc />
-        public void OnSticker(Func<IVkApi, Message, CancellationToken, Task> func)
-        {
-            _onStickerCommand = func ?? throw new ArgumentNullException(nameof(func));
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
         }
         
         /// <inheritdoc />
-        public void OnPhoto(Func<IVkApi, Message, CancellationToken, Task> func)
+        public void OnSticker(long stickerId, string answer)
         {
-            _onPhotoCommand = func ?? throw new ArgumentNullException(nameof(func));
-        }
-        
-        /// <inheritdoc />
-        public void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> botException)
-        {
-            _botException = botException ?? throw new ArgumentNullException(nameof(botException));
+            OnStickerHandler((null, stickerId), answer);
         }
 
         /// <inheritdoc />
-        public void OnException(Func<System.Exception, CancellationToken, Task> exception)
+        public void OnSticker((long peerId, long stickerId) tuple, string answer)
         {
-            _exception = exception ?? throw new ArgumentNullException(nameof(exception));
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+            
+            OnStickerHandler(tuple, answer);
         }
+
+        /// <inheritdoc />
+        public void OnSticker(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnSticker(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answers[_random.Next(0, answers.Length)]);
+            });
+        }
+
+        /// <inheritdoc />
+        public void OnSticker(long stickerId, params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnStickerHandler((null, stickerId), answers[_random.Next(0, answers.Length)]);
+        }
+
+        /// <inheritdoc />
+        public void OnSticker((long peerId, long stickerId) tuple, params string[] answers)
+        {
+            if (tuple.peerId <= 0) throw new ArgumentOutOfRangeException(nameof(tuple.peerId));
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+
+            OnStickerHandler(tuple, answers[_random.Next(0, answers.Length)]);
+        }
+
+        /// <summary>
+        ///     Common logic of abstracted reply handlers.
+        /// </summary>
+        /// <param name="tuple">Regular expression and Regex options.</param>
+        /// <param name="answer">Text response.</param>
+        /// <exception cref="System.ArgumentOutOfRangeException">Thrown if the stickerId is less than or equal to zero.</exception>
+        /// <exception cref="System.ArgumentException">Thrown if answer is null or whitespace.</exception>
+        private void OnStickerHandler((long? peerId, long stickerId) tuple, string answer)
+        {            
+            if (string.IsNullOrWhiteSpace(answer))
+                throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+
+            _stickerCommands.Store(tuple, async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        #endregion
+        
+        #region EventHandlers
+
+        /// <inheritdoc />
+        public void OnPhoto(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _photoEvent.SetHandler(handler);
+        }
+
+        /// <inheritdoc />
+        public void OnPhoto(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+
+            OnPhoto(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        
+        /// <inheritdoc />
+        public void OnPhoto(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnPhoto(answers[_random.Next(0, answers.Length)]);
+        }
+        
+        /// <inheritdoc />
+        public void OnVoice(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _voiceEvent.SetHandler(handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnVoice(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            OnVoice(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        
+        /// <inheritdoc />
+        public void OnVoice(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnVoice(answers[_random.Next(0, answers.Length)]);
+        }
+
+        /// <inheritdoc />
+        public void OnForward(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _forwardEvent.SetHandler(handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnForward(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            OnForward(async (api, update, token) =>
+            {
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        
+        /// <inheritdoc />
+        public void OnForward(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnForward(answers[_random.Next(0, answers.Length)]);
+        }
+        
+        /// <inheritdoc />
+        public void OnBotException(Func<IVkApi, Message, System.Exception, CancellationToken, Task> handler)
+        {
+            _botExceptionEvent.SetHandler(handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnException(Func<System.Exception, CancellationToken, Task> handler)
+        {
+            _exceptionEvent.SetHandler(handler);
+        }
+        #endregion
 
         /// <inheritdoc />
         public async Task ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var longPollServer = await GetLongPollServerAsync(cancellationToken);
+            var longPollServer = await GetLongPollServerAsync(cancellationToken).ConfigureAwait(false);
 
             var pts = longPollServer.Pts;
             var ts = ulong.Parse(longPollServer.Ts);
@@ -298,153 +573,94 @@ namespace VkNet.FluentCommands.UserBot
             {
                 try
                 {
-                    var longPollHistory = await GetLongPollHistoryAsync(ts, pts, cancellationToken);
-                    if (!longPollHistory.Messages.Any())
-                    {
-                        continue;
-                    }
+                    var longPollHistory = await GetLongPollHistoryAsync(ts, pts, cancellationToken).ConfigureAwait(false);
+                    if (!longPollHistory.Messages.Any()) continue;
 
-                    foreach (var message in longPollHistory.Messages)
+                    foreach (var update in longPollHistory.Messages)
                     {
                         try
                         {
-                            var type = GetMessageType(message);
+                            if (update == null) continue;
+                            if (update?.Type != _longPollConfiguration.MessageType) continue;
+                            if (!update.PeerId.HasValue) throw new System.Exception("No PeerId");
+                            if (!update.FromId.HasValue) throw new System.Exception("No PeerId");
+                            
+                            var forwardedMessages = update.ForwardedMessages?.ToArray() ?? new Message[] { };
+                            var attachments = update.Attachments?.ToArray() ?? new Attachment[] { };
+                            var replyMessage = update.ReplyMessage;
+                            var actionObject = update.Action;
+                            var type = DetectMessageType(forwardedMessages, attachments, actionObject, replyMessage);
+                            var messageToProcess = new MessageToProcess(_botClient, update);
+                            
                             switch (type)
                             {
-                                case MessageType.Message:
-                                    await OnTextMessage(message, cancellationToken);
-                                    break;
-                                case MessageType.Sticker:
-                                    await OnStickerMessage(message, cancellationToken);
-                                    break;
-                                case MessageType.Photo:
-                                    if (_onPhotoCommand != null)
-                                    {
-                                        await _onPhotoCommand(_botClient, message, cancellationToken);
-                                    }
-                                    break;
-                                case MessageType.None:
-                                    break;
+                                case VkMessageType.Message:
+                                case VkMessageType.Reply:
+                                case VkMessageType.Sticker:
+                                    await CreateCommandHandler(type).Handle(messageToProcess, cancellationToken).ConfigureAwait(false);
+                                    continue;
+                                case VkMessageType.Forward:
+                                    await _forwardEvent.TriggerHandler(messageToProcess, cancellationToken).ConfigureAwait(false);
+                                    continue;
+                                case VkMessageType.Photo:
+                                    await _photoEvent.TriggerHandler(messageToProcess, cancellationToken).ConfigureAwait(false);
+                                    continue;
+                                case VkMessageType.Voice:
+                                    await _voiceEvent.TriggerHandler(messageToProcess, cancellationToken).ConfigureAwait(false);
+                                    continue;
+                                default:
+                                    throw new ArgumentOutOfRangeException();
                             }
                         }
                         catch (System.Exception e)
                         {
-                            await (_botException?.Invoke(_botClient, message, e, cancellationToken) ?? throw e);
+                            var messageToProcess = new MessageToProcess(_botClient, update);
+                            await _botExceptionEvent.TriggerHandler(messageToProcess, e, cancellationToken).ConfigureAwait(false);
+                            continue;
                         }
-
-                        pts = longPollHistory.NewPts;
                     }
+                    
+                    pts = longPollHistory.NewPts;
                 }
                 catch (LongPollKeyExpiredException e)
                 {
-                    longPollServer = await GetLongPollServerAsync(cancellationToken: cancellationToken);
+                    longPollServer = await GetLongPollServerAsync(cancellationToken).ConfigureAwait(false);
 
-                    ts = uint.Parse(longPollServer.Ts);
+                    ts = ulong.Parse(longPollServer.Ts);
                     pts = longPollServer.Pts;
 
-                    if (_exception != null)
-                    {
-                        await _exception.Invoke(e, cancellationToken);
-                    }
+                    await _exceptionEvent.TriggerHandler(e, cancellationToken).ConfigureAwait(false);
                 }
                 catch (System.Exception e)
                 {
-                    await (_exception?.Invoke(e, cancellationToken) ?? throw e);
+                    await _exceptionEvent.TriggerHandler(e, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
 
-        /// <summary>
-        ///     This method returns the type of incoming message.
-        /// </summary>
-        /// <param name="message">Private message.</param>
-        /// <returns>The type of incoming message.</returns>
-        private static MessageType GetMessageType(Message message)
+        private static VkMessageType DetectMessageType(
+            IReadOnlyCollection<Message> forwardMessages,
+            IReadOnlyCollection<Attachment> attachments,
+            MessageActionObject actionObject,
+            Message replyMessage)
         {
-            if (!string.IsNullOrWhiteSpace(message.Text))
-            {
-                return MessageType.Message;
-            }
-            
-            if (message.Attachments.Any(x => x.Type == typeof(Sticker)))
-            {
-                return MessageType.Sticker;
-            }
-            
-            if (message.Attachments.Any(x => x.Type == typeof(Photo)))
-            {
-                return MessageType.Photo;
-            }
+            // todo concrete event
+            // if (actionObject != null) return VkMessageType.Event;
+            if (forwardMessages?.Count > 0) return VkMessageType.Forward;
+            if (replyMessage != null) return VkMessageType.Reply;
+            if (attachments.Any(x => x.Type == typeof(Sticker))) return VkMessageType.Sticker;
+            if (attachments.Any(x => x.Type == typeof(Photo))) return VkMessageType.Photo;
+            if (attachments.Any(x => x.Type == typeof(AudioMessage))) return VkMessageType.Voice;
 
-            return MessageType.None;
+            return VkMessageType.Message;
         }
         
-        /// <summary>
-        ///     This method has the logic of processing a new message.
-        /// </summary>
-        /// <param name="message">User updates</param>
-        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
-        private async Task OnTextMessage(Message message, CancellationToken cancellationToken = default)
+        private ICommandHandler<MessageToProcess> CreateCommandHandler(VkMessageType vkMessageType)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if(vkMessageType == VkMessageType.Reply) return new ReplyCommandHandler(_replyCommands);
+            if(vkMessageType == VkMessageType.Sticker) return new StickerCommandHandler(_stickerCommands);
             
-            var command = _textCommands
-                .AsParallel()
-                .Where(x =>
-                {
-                    var peerId = x.Key.Item1;
-                    var pattern = x.Key.Item2;
-                    var options = x.Key.Item3;
-
-                    if (peerId == message.PeerId)
-                    {
-                        return Regex.IsMatch(message.Text, pattern, options);
-                    }
-                    
-                    return !peerId.HasValue && Regex.IsMatch(message.Text, pattern, options);
-                })
-                .Select(x => x.Value)
-                .FirstOrDefault();
-
-            if (command == null)
-            {
-                return;
-            }
-
-            await command(_botClient, message, cancellationToken);
-        }
-        
-        /// <summary>
-        ///     This method has a sticker processing logic.
-        /// </summary>
-        /// <param name="message">User updates</param>
-        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
-        private async Task OnStickerMessage(Message message, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var stickerId = message.Attachments
-                .Where(x => x.Type == typeof(Sticker))
-                .Select(x => x.Instance.Id)
-                .FirstOrDefault();
-
-            var command = _stickerCommands
-                .AsParallel()
-                .Where(x => x.Key == stickerId)
-                .Select(x => x.Value)
-                .SingleOrDefault();
-
-            if (command == null)
-            {
-                if (_onStickerCommand != null)
-                {
-                    await _onStickerCommand(_botClient, message, cancellationToken);
-                }
-                
-                return;
-            }
-
-            await command(_botClient, message, cancellationToken);
+            return new TextCommandHandler(_textCommands);
         }
         
         /// <summary>
@@ -455,7 +671,7 @@ namespace VkNet.FluentCommands.UserBot
         private async Task<LongPollServerResponse> GetLongPollServerAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await _botClient.Messages.GetLongPollServerAsync(needPts: _longPollConfiguration.NeedPts, lpVersion: _longPollConfiguration.LpVersion);
+            return await _botClient.Messages.GetLongPollServerAsync(_longPollConfiguration.NeedPts, _longPollConfiguration.LpVersion).ConfigureAwait(false);
         }
 
         ///  <summary>
@@ -478,7 +694,7 @@ namespace VkNet.FluentCommands.UserBot
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await _botClient.Messages.GetLongPollHistoryAsync(@params: new MessagesGetLongPollHistoryParams
+            return await _botClient.Messages.GetLongPollHistoryAsync(new MessagesGetLongPollHistoryParams
             {
                 Ts = ts,
                 Pts = pts,
@@ -489,7 +705,7 @@ namespace VkNet.FluentCommands.UserBot
                 MsgsLimit = _longPollConfiguration.MsgsLimit,
                 MaxMsgId = _longPollConfiguration.MaxMsgId,
                 LpVersion = _longPollConfiguration.LpVersion
-            });
+            }).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -509,7 +725,7 @@ namespace VkNet.FluentCommands.UserBot
                 PeerId = peerId,
                 Message = message,
                 RandomId = GetRandomId()
-            });
+            }).ConfigureAwait(false);
         }
         
         /// <summary>
