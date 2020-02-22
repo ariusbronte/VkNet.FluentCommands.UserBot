@@ -20,13 +20,25 @@ using VkNet.FluentCommands.UserBot;
 //...
 
 FluentUserBotCommands commands = new FluentUserBotCommands();
+await commands.InitBotAsync("login", "very hard password");
 
-await commands.InitBotAsync(new ApiAuthParams
-{
-    Login = "login",
-    Password = "very hard password"
-});
+commands.OnText("^ping$", "pong");
+commands.OnText("^hello$", new[] {"hi!", "hey!", "good day!"});
+commands.OnText("command not found");
 
+await commands.ReceiveMessageAsync();
+```
+``` C#
+commands.OnSticker("sticker triggered");
+commands.OnSticker(163, "orejas triggered");
+commands.OnPhoto("photo triggered");
+commands.OnVoice("voice triggered");
+commands.OnReply("reply triggered");
+commands.OnReply("^ping$", "pong"); 
+commands.OnForward("forward triggered");
+```
+## Extended logic
+``` C# 
 commands.OnText("^ping$", async (api, message, token) =>
 {
     await api.Messages.SendAsync(new MessagesSendParams
@@ -36,22 +48,20 @@ commands.OnText("^ping$", async (api, message, token) =>
         RandomId = random.Next(int.MinValue, int.MaxValue)
     });
 });
-
-await commands.ReceiveMessageAsync();
 ```
-``` C#
-commands.OnSticker(async (api, update, token) => {});
-commands.OnSticker(163, async (api, update, token) => {});
-commands.OnPhoto(async (api, update, token) => {});
-```
+*this applies to all triggers
 ## Regular expression configuration
 ``` C#
 commands.OnText(("^ping$", RegexOptions.IgnoreCase), async (api, update, token) => {});
+commands.OnText(("^ping$", RegexOptions.IgnoreCase), "pong");
 ```
+*this applies to all triggers
 ## Individual logic
 ``` C#
-commands.OnText((2_000_000_000, "^ping$", RegexOptions.IgnoreCase), async (api, update, token) => {});
+commands.OnText((2_000_000_000 + 1, "^ping$", RegexOptions.IgnoreCase), "pong1");
+commands.OnText((2_000_000_000 + 2, "^ping$"), async (api, update, token) => {});
 ```
+*this applies to all triggers
 ## Bot exception handler
 ``` C#
 commands.OnBotException(async (api, update, e, token) => {});
@@ -63,5 +73,16 @@ commands.OnException((e, token) =>
 {
     Console.WriteLine(e.Message);
     return Task.CompletedTask;
+});
+```
+## Custom configurations 
+``` C#
+commands.ConfigureUserLongPoll(new UserLongPollConfiguration { });
+// the configuration has a convenient property that allows you to configure the incoming message filter
+// if you want to process only sent messages, set the value MessageType.Sended
+// (convenient if you use the bot as an extension of the basic VK function)
+commands.ConfigureUserLongPoll(new UserLongPollConfiguration
+{
+    MessageType = MessageType.Sended
 });
 ```
