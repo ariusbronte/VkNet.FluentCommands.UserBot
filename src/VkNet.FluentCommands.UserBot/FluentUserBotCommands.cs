@@ -534,6 +534,7 @@ namespace VkNet.FluentCommands.UserBot
             
             OnForward(async (api, update, token) =>
             {
+                token.ThrowIfCancellationRequested();
                 await SendAsync(update.PeerId, answer);
             });
         }
