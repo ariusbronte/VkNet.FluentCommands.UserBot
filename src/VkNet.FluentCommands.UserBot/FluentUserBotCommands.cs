@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -10,8 +9,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using VkNet.Abstractions;
 using VkNet.AudioBypassService.Extensions;
-using VkNet.Enums;
-using VkNet.Enums.Filters;
 using VkNet.Exception;
 using VkNet.FluentCommands.UserBot.Abstractions;
 using VkNet.FluentCommands.UserBot.Handlers;
