@@ -24,7 +24,6 @@ namespace VkNet.FluentCommands.UserBot.Handlers
 
             var botClient = messageToProcess.BotClient;
             var update = messageToProcess.Message;
-            var reply = update.ReplyMessage;
             
             if (commands.IsEmpty)
             {
@@ -38,9 +37,9 @@ namespace VkNet.FluentCommands.UserBot.Handlers
                 var pattern = x.Key.pattern;
                 var options = x.Key.options;
 
-                if (peerId == reply.PeerId)
+                if (peerId == update.PeerId)
                 {
-                    return Regex.IsMatch(reply.Text, pattern, options);
+                    return Regex.IsMatch(update.Text, pattern, options);
                 }
 
                 if (peerId.HasValue)
@@ -48,7 +47,7 @@ namespace VkNet.FluentCommands.UserBot.Handlers
                     return false;
                 }
 
-                return Regex.IsMatch(reply.Text, pattern, options);
+                return Regex.IsMatch(update.Text, pattern, options);
             }).Select(x => x.Value).FirstOrDefault();
 
             if (command == null)
