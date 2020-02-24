@@ -811,9 +811,16 @@ namespace VkNet.FluentCommands.UserBot
                         
             if (forwardMessages?.Count > 0) return VkMessageType.Forward;
             if (replyMessage != null) return VkMessageType.Reply;
-            if (attachments.Any(x => x.Type == typeof(Sticker))) return VkMessageType.Sticker;
-            if (attachments.Any(x => x.Type == typeof(Photo))) return VkMessageType.Photo;
-            if (attachments.Any(x => x.Type == typeof(AudioMessage))) return VkMessageType.Voice;
+            
+            if (attachments?.Count > 0)
+            {
+                foreach (var attachment in attachments)
+                {
+                    if (attachment.Type == typeof(Sticker)) return VkMessageType.Sticker;
+                    if (attachment.Type == typeof(Photo)) return VkMessageType.Photo;
+                    if (attachment.Type == typeof(AudioMessage)) return VkMessageType.Voice;
+                }
+            }
 
             return VkMessageType.Message;
         }
