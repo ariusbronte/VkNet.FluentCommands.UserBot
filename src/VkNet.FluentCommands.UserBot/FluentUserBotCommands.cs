@@ -22,7 +22,8 @@ using VkNet.Model.RequestParams;
 
 namespace VkNet.FluentCommands.UserBot
 {
-    public class FluentUserBotCommands : IFluentGroupBotCommands
+    public class FluentUserBotCommands
+        // : IFluentGroupBotCommands
     {
         /// <summary>
         ///     Implementation of interaction with VK.
@@ -40,6 +41,10 @@ namespace VkNet.FluentCommands.UserBot
 
         private readonly PhotoEventStore _photoEvent = new PhotoEventStore();
         private readonly VoiceEventStore _voiceEvent = new VoiceEventStore();
+        private readonly VideoEventStore _videoEvent = new VideoEventStore();
+        // private readonly AudioEventStore _audioEvent = new AudioEventStore();
+        // private readonly PollEventStore _pollEvent = new PollEventStore();
+        // private readonly DocumentEventStore _documentEvent = new DocumentEventStore();
 
         private readonly ChatCreateEventStore _chatCreateEvent = new ChatCreateEventStore();
         private readonly ChatInviteUserEventStore _chatInviteUserEvent = new ChatInviteUserEventStore();
@@ -668,6 +673,35 @@ namespace VkNet.FluentCommands.UserBot
         }
         #endregion
         
+        #region VideoHandlers
+        /// <inheritdoc />
+        public void OnVideo(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _videoEvent.SetHandler(handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnVideo(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            OnVideo(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        
+        /// <inheritdoc />
+        public void OnVideo(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnVideo(answers[_random.Next(0, answers.Length)]);
+        }
+        #endregion
+        
         #region EventHandlers
         /// <inheritdoc />
         public void OnChatCreateAction(Func<IVkApi, Message, CancellationToken, Task> handler)
@@ -789,6 +823,9 @@ namespace VkNet.FluentCommands.UserBot
                                 case VkMessageType.Voice:
                                     await _voiceEvent.TriggerHandler(messageToProcess, cancellationToken).ConfigureAwait(false);
                                     continue;
+                                case VkMessageType.Video:
+                                    await _videoEvent.TriggerHandler(messageToProcess, cancellationToken).ConfigureAwait(false);
+                                    continue;
                                 case VkMessageType.ChatCreate:
                                     await _chatCreateEvent.TriggerHandler(messageToProcess, cancellationToken).ConfigureAwait(false);
                                     continue;
@@ -877,6 +914,7 @@ namespace VkNet.FluentCommands.UserBot
                     if (attachment.Type == typeof(Sticker)) return VkMessageType.Sticker;
                     if (attachment.Type == typeof(Photo)) return VkMessageType.Photo;
                     if (attachment.Type == typeof(AudioMessage)) return VkMessageType.Voice;
+                    if (attachment.Type == typeof(Video)) return VkMessageType.Video;
                 }
             }
 

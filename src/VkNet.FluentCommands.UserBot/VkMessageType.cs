@@ -36,6 +36,11 @@
         Voice,
         
         /// <summary>
+        ///     Video message type.
+        /// </summary>
+        Video,
+        
+        /// <summary>
         ///     User created chat action.
         /// </summary>
         ChatCreate,
