@@ -742,10 +742,10 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
         /// <exception cref="ArgumentNullException">Thrown if answers is null.</exception>
         /// <exception cref="System.ArgumentException">Thrown if answers is empty.</exception>
         void OnPhoto(params string[] answers);
-
+        
         /// <summary>
         ///     Global extended handler of all incoming voice messages.
-        ///     Triggered if no matches are found or missing in the <see cref="VoiceEventStore"/>.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.VoiceEventStore"/>.
         /// </summary>
         /// <remarks>Is not required.</remarks>
         /// <param name="handler">Handler logic.</param>
@@ -754,7 +754,7 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
 
         /// <summary>
         ///     Global <c>NOT</c> extended handler of all incoming voice messages.
-        ///     Triggered if no matches are found or missing in the <see cref="VoiceEventStore"/>.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.VoiceEventStore"/>.
         /// </summary>
         /// <remarks>Is not required.</remarks>
         /// <remarks>Is an abstraction over the main handler.</remarks>
@@ -764,7 +764,7 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
         
         /// <summary>
         ///     Global <c>NOT</c> extended handler of all incoming voice messages.
-        ///     Triggered if no matches are found or missing in the <see cref="VoiceEventStore"/>.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.VoiceEventStore"/>.
         /// </summary>
         /// <remarks>Is not required.</remarks>
         /// <remarks>Is an abstraction over the main handler.</remarks>
