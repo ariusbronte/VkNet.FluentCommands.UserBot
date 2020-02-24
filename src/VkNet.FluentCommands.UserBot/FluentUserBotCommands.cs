@@ -646,7 +646,12 @@ namespace VkNet.FluentCommands.UserBot
                         try
                         {
                             if (update == null) continue;
-                            if (update?.Type != _longPollConfiguration.MessageType) continue;
+                            
+                            if (_longPollConfiguration?.MessageType != null)
+                            {
+                                if (update?.Type != _longPollConfiguration?.MessageType) continue;
+                            }
+
                             if (!update.PeerId.HasValue) throw new System.Exception("No PeerId");
                             if (!update.FromId.HasValue) throw new System.Exception("No PeerId");
                             

@@ -61,6 +61,6 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
         ///     Set <c>Received</c> if you only want to receive incoming messages.
         ///     Set <c>Sended</c> if you want to receive only sent messages.
         /// </summary>
-        MessageType MessageType { get; set; }
+        MessageType? MessageType { get; set; }
     }
 }

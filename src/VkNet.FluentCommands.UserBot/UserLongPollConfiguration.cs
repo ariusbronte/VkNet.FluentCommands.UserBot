@@ -35,7 +35,7 @@ namespace VkNet.FluentCommands.UserBot
         public long? MaxMsgId { get; set; }
 
         /// <inheritdoc />
-        public MessageType MessageType { get; set; } = MessageType.Received;
+        public MessageType? MessageType { get; set; } = null;
         
         /// <inheritdoc />
         public static UserLongPollConfiguration Default => new UserLongPollConfiguration();
