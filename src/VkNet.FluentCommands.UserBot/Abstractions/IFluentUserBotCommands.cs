@@ -714,7 +714,7 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
 
         /// <summary>
         ///     Global extended handler of all incoming photo messages.
-        ///     Triggered if no matches are found or missing in the <see cref="PhotoEventStore"/>.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.PhotoEventStore"/>.
         /// </summary>
         /// <remarks>Is not required.</remarks>
         /// <param name="handler">Handler logic.</param>
@@ -723,7 +723,7 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
 
         /// <summary>
         ///     Global <c>NOT</c> extended handler of all incoming photo messages.
-        ///     Triggered if no matches are found or missing in the <see cref="PhotoEventStore"/>.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.PhotoEventStore"/>.
         /// </summary>
         /// <remarks>Is not required.</remarks>
         /// <remarks>Is an abstraction over the main handler.</remarks>
@@ -733,7 +733,7 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
         
         /// <summary>
         ///     Global <c>NOT</c> extended handler of all incoming photo messages.
-        ///     Triggered if no matches are found or missing in the <see cref="PhotoEventStore"/>.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.PhotoEventStore"/>.
         /// </summary>
         /// <remarks>Is not required.</remarks>
         /// <remarks>Is an abstraction over the main handler.</remarks>
