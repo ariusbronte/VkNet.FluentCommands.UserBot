@@ -610,6 +610,64 @@ namespace VkNet.FluentCommands.UserBot
         }
         #endregion
        
+        #region PhotoHandlers
+        /// <inheritdoc />
+        public void OnPhoto(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _photoEvent.SetHandler(handler);
+        }
+
+        /// <inheritdoc />
+        public void OnPhoto(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+
+            OnPhoto(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        
+        /// <inheritdoc />
+        public void OnPhoto(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnPhoto(answers[_random.Next(0, answers.Length)]);
+        }
+        #endregion
+        
+        #region VoiceHandlers
+        /// <inheritdoc />
+        public void OnVoice(Func<IVkApi, Message, CancellationToken, Task> handler)
+        {
+            _voiceEvent.SetHandler(handler);
+        }
+        
+        /// <inheritdoc />
+        public void OnVoice(string answer)
+        {
+            if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(answer));
+            
+            OnVoice(async (api, update, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await SendAsync(update.PeerId, answer);
+            });
+        }
+        
+        /// <inheritdoc />
+        public void OnVoice(params string[] answers)
+        {
+            if (answers == null) throw new ArgumentNullException(nameof(answers));
+            if (answers.Length == 0) throw new ArgumentException("Value cannot be an empty collection.", nameof(answers));
+            
+            OnVoice(answers[_random.Next(0, answers.Length)]);
+        }
+        #endregion
+        
         #region EventHandlers
         /// <inheritdoc />
         public void OnChatCreateAction(Func<IVkApi, Message, CancellationToken, Task> handler)
