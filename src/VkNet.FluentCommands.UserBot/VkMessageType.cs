@@ -41,6 +41,11 @@
         Video,
         
         /// <summary>
+        ///     Audio message type.
+        /// </summary>
+        Audio,
+        
+        /// <summary>
         ///     User created chat action.
         /// </summary>
         ChatCreate,
