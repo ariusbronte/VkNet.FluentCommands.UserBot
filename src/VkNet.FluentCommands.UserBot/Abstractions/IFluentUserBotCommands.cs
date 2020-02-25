@@ -837,6 +837,37 @@ namespace VkNet.FluentCommands.UserBot.Abstractions
         void OnAudio(params string[] answers);
         
         /// <summary>
+        ///     Global extended handler of all incoming document messages.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.DocumentEventStore"/>.
+        /// </summary>
+        /// <remarks>Is not required.</remarks>
+        /// <param name="handler">Handler logic.</param>
+        /// <exception cref="System.ArgumentNullException">Thrown if handler is null.</exception>
+        void OnDocument(Func<IVkApi, Message, CancellationToken, Task> handler);
+
+        /// <summary>
+        ///     Global <c>NOT</c> extended handler of all incoming document messages.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.DocumentEventStore"/>.
+        /// </summary>
+        /// <remarks>Is not required.</remarks>
+        /// <remarks>Is an abstraction over the main handler.</remarks>
+        /// <param name="answer">Text response.</param>
+        /// <exception cref="System.ArgumentException">Thrown if answer is null or whitespace.</exception>
+        void OnDocument(string answer);
+        
+        /// <summary>
+        ///     Global <c>NOT</c> extended handler of all incoming document messages.
+        ///     Triggered if no matches are found or missing in the <see cref="VkNet.FluentCommands.UserBot.Storage.DocumentEventStore"/>.
+        /// </summary>
+        /// <remarks>Is not required.</remarks>
+        /// <remarks>Is an abstraction over the main handler.</remarks>
+        /// <remarks>Selects a random string from the array to send the message to.</remarks>
+        /// <param name="answers">Text responses.</param>
+        /// <exception cref="ArgumentNullException">Thrown if answers is null.</exception>
+        /// <exception cref="System.ArgumentException">Thrown if answers is empty.</exception>
+        void OnDocument(params string[] answers);
+        
+        /// <summary>
         ///     Triggered when user created chat.
         /// </summary>
         /// <param name="handler">Handler logic.</param>

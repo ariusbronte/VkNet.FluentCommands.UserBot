@@ -46,6 +46,11 @@
         Audio,
         
         /// <summary>
+        ///     Document message type.
+        /// </summary>
+        Document,
+        
+        /// <summary>
         ///     User created chat action.
         /// </summary>
         ChatCreate,
